@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Computer Hardware Learning Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+        }
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        /* UI Overlay */
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .ui-card {
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        #timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4facfe;
+        }
+        #score {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        /* Controls Overlay */
+        #controls-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        /* Modal Quiz Window */
+        #quiz-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #quiz-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-card {
+            background: #252830;
+            color: #ffffff;
+            width: 90%;
+            max-width: 500px;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #3a3f4d;
+            text-align: center;
+        }
+        .modal-card h2 {
+            color: #00d2ff;
+            margin-bottom: 10px;
+        }
+        .modal-card p {
+            font-size: 16px;
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .option-btn {
+            background: #323745;
+            color: white;
+            border: 2px solid transparent;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.2s ease;
+        }
+        .option-btn:hover {
+            background: #3d4354;
+            border-color: #00d2ff;
+        }
+        
+        /* Game Over Screen */
+        #game-over-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 10, 15, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 200;
+            display: none;
+        }
+        #game-over-screen h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+            color: #00d2ff;
+        }
+        #restart-btn {
+            margin-top: 25px;
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #00d2ff;
+            color: #000;
+            border: none;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ui-overlay">
+            <div class="ui-card" id="timer">Time Left: 15:00</div>
+            <div class="ui-card" id="score">Hardware Cleared: 0 / 5</div>
+        </div>
+
+        <div id="controls-info">
+            🎮 <b>Controls:</b> Use <b>W, A, S, D</b> or <b>Arrow Keys</b> to walk near hardware components.
+        </div>
+
+        <!-- Quiz Modal -->
+        <div id="quiz-modal">
+            <div class="modal-card">
+                <h2 id="quiz-title">Component Name</h2>
+                <p id="quiz-desc">Component description here...</p>
+                <div style="text-align: left; margin-bottom: 10px; font-weight: bold;" id="quiz-question">Question goes here?</div>
+                <div class="options-grid" id="options-container">
+                    <!-- Buttons injected dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Over Modal -->
+        <div id="game-over-screen">
+            <h1 id="game-over-title">Game Finished!</h1>
+            <p id="game-over-msg">You have completed all hardware quizzes!</p>
+            <p id="final-score" style="margin-top: 10px; font-size: 20px; color: #aaa;"></p>
+            <button id="restart-btn" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA & CONFIGURATION ---
+        const hardwareData = [
+            {
+                id: 'motherboard',
+                name: '1. MOTHERBOARD',
+                color: 0x1e3d59,
+                pos: { x: -8, z: -5 },
+                description: 'The main circuit board that connects all components.',
+                question: 'What is the primary role of the Motherboard in a computer system?',
+                options: [
+                    'To process complex graphic calculations',
+                    'To connect and allow communication between all hardware components',
+                    'To store long-term personal files',
+                    'To deliver raw AC electricity from the wall socket'
+                ],
+                answer: 1
+            },
+            {
+                id: 'cpu',
+                name: '2. PROCESSOR (CPU)',
+                color: 0xcbaf87,
+                pos: { x: 0, z: -8 },
+                description: 'The brain of the computer that processes instructions.',
+                question: 'Which component is commonly referred to as the "Brain" of the computer?',
+                options: [
+                    'RAM',
+                    'SSD',
+                    'CPU',
+                    'PSU'
+                ],
+                answer: 2
+            },
+            {
+                id: 'ram',
+                name: '3. MEMORY (RAM)',
+                color: 0x2b580c,
+                pos: { x: 8, z: -5 },
+                description: 'Temporary storage that helps the computer run programs smoothly.',
+                question: 'What happens to the data stored in RAM when the computer is turned off?',
+                options: [
+                    'It is saved permanently to the drive',
+                    'It is backed up to the motherboard',
+                    'It is erased because RAM is volatile memory',
+                    'It gets sent directly to the power supply'
+                ],
+                answer: 2
+            },
+            {
+                id: 'ssd',
+                name: '4. STORAGE (SSD)',
+                color: 0x438a5e,
+                pos: { x: -5, z: 4 },
+                description: 'Stores data, files, and operating system permanently.',
+                question: 'Why are Solid State Drives (SSDs) preferred over traditional Hard Drives (HDDs)?',
+                options: [
+                    'They read and write data significantly faster with no moving parts',
+                    'They supply electrical power to the system',
+                    'They cool down the CPU during heavy work',
+                    'They hold temporary temporary memory for active apps'
+                ],
+                answer: 0
+            },
+            {
+                id: 'psu',
+                name: '5. POWER SUPPLY (PSU)',
+                color: 0x222831,
+                pos: { x: 5, z: 4 },
+                description: 'Provides and regulates power to all computer components.',
+                question: 'What is the main function of the Power Supply Unit (PSU)?',
+                options: [
+                    'Boost computer speed during gaming',
+                    'Convert AC power from an outlet into usable DC power for components',
+                    'Store the operating system permanently',
+                    'Display graphics onto the monitor'
+                ],
+                answer: 1
+            }
+        ];
+
+        let clearedCount = 0;
+        let currentHardware = null;
+        let isQuizActive = false;
+
+        // --- 15 MINUTE TIMER ---
+        let totalSeconds = 15 * 60;
+        const timerElement = document.getElementById('timer');
+        
+        const countdown = setInterval(() => {
+            if (isQuizActive) return; // Pause timer while answering, if desired (or keep running)
+            
+            totalSeconds--;
+            let mins = Math.floor(totalSeconds / 60);
+            let secs = totalSeconds % 60;
+            
+            timerElement.textContent = `Time Left: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+            if (totalSeconds <= 0) {
+                clearInterval(countdown);
+                showGameOver(false, "Time is up! You ran out of 15 minutes.");
+            }
+        }, 1000);
+
+        // --- THREE.JS SCENE SETUP ---
+        const container = document.getElementById('game-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121216);
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 18, 16);
+        camera.lookAt(0, 0, 0);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // Floor / Platform
+        const floorGeo = new THREE.PlaneGeometry(30, 24);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.8 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Grid Helper on floor for tech aesthetic
+        const gridHelper = new THREE.GridHelper(30, 30, 0x00d2ff, 0x3a3f4d);
+        gridHelper.position.y = 0.01;
+        scene.add(gridHelper);
+
+        // --- HARDWARE OBJECTS CREATION ---
+        const hardwareMeshes = [];
+
+        hardwareData.forEach(data => {
+            const group = new THREE.Group();
+            group.position.set(data.pos.x, 0, data.pos.z);
+
+            // Base Block representing hardware
+            const geo = new THREE.BoxGeometry(3, 1, 3);
+            const mat = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.4 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.y = 0.5;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+
+            // Indicator Beacon Ground Ring
+            const ringGeo = new THREE.RingGeometry(1.8, 2.1, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.y = 0.02;
+            group.add(ring);
+
+            scene.add(group);
+
+            hardwareMeshes.push({
+                data: data,
+                group: group,
+                cleared: false
+            });
+        });
+
+        // --- CHARACTER (GIRL SPRITE) CREATION ---
+        // Create canvas dynamically for character sprite
+        function createCharacterTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            // Simple stylized fallback drawing matching short dark hair & lab coat look
+            ctx.fillStyle = '#f3c19d'; // Skin
+            ctx.beginPath(); ctx.arc(64, 40, 20, 0, Math.PI * 2); ctx.fill(); // Head
+            
+            ctx.fillStyle = '#222'; // Hair & Glasses
+            ctx.beginPath(); ctx.arc(64, 32, 22, Math.PI, 0); ctx.fill(); 
+            ctx.fillRect(44, 36, 12, 8); ctx.fillRect(72, 36, 12, 8); // Glasses frame
+
+            ctx.fillStyle = '#ffffff'; // White Lab Coat
+            ctx.fillRect(44, 60, 40, 70); 
+
+            ctx.fillStyle = '#2b2b2b'; // Pants
+            ctx.fillRect(48, 130, 14, 80);
+            ctx.fillRect(66, 130, 14, 80);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const charTexture = createCharacterTexture();
+        const charMat = new THREE.SpriteMaterial({ map: charTexture });
+        const character = new THREE.Sprite(charMat);
+        character.scale.set(2, 4, 1);
+        character.position.set(0, 2, 8);
+        scene.add(character);
+
+        // --- CHARACTER CONTROLS & MOVEMENT ---
+        const keys = { W: false, A: false, S: false, D: false };
+        const speed = 0.15;
+
+        window.addEventListener('keydown', (e) => {
+            if (isQuizActive) return;
+            const k = e.key.toUpperCase();
+            if (k === 'W' || k === 'ARROWUP') keys.W = true;
+            if (k === 'S' || k === 'ARROWDOWN') keys.S = true;
+            if (k === 'A' || k === 'ARROWLEFT') keys.A = true;
+            if (k === 'D' || k === 'ARROWRIGHT') keys.D = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.toUpperCase();
+            if (k === 'W' || k === 'ARROWUP') keys.W = false;
+            if (k === 'S' || k === 'ARROWDOWN') keys.S = false;
+            if (k === 'A' || k === 'ARROWLEFT') keys.A = false;
+            if (k === 'D' || k === 'ARROWRIGHT') keys.D = false;
+        });
+
+        function updateMovement() {
+            if (isQuizActive) return;
+
+            let moveX = 0;
+            let moveZ = 0;
+
+            if (keys.W) moveZ -= speed;
+            if (keys.S) moveZ += speed;
+            if (keys.A) moveX -= speed;
+            if (keys.D) moveX += speed;
+
+            // Boundaries
+            const newX = character.position.x + moveX;
+            const newZ = character.position.z + moveZ;
+
+            if (Math.abs(newX) < 14) character.position.x = newX;
+            if (Math.abs(newZ) < 11) character.position.z = newZ;
+
+            // Follow camera smoothly
+            camera.position.x = character.position.x * 0.3;
+            camera.position.z = character.position.z + 10;
+            camera.lookAt(character.position.x, 1, character.position.z - 2);
+
+            // Proximity Check against hardware
+            checkProximity();
+        }
+
+        // --- PROXIMITY & QUIZ LOGIC ---
+        const modal = document.getElementById('quiz-modal');
+
+        function checkProximity() {
+            hardwareMeshes.forEach(item => {
+                if (item.cleared) return;
+
+                const dist = character.position.distanceTo(item.group.position);
+                if (dist < 2.5) {
+                    openQuiz(item);
+                }
+            });
+        }
+
+        function openQuiz(item) {
+            isQuizActive = true;
+            currentHardware = item;
+
+            document.getElementById('quiz-title').textContent = item.data.name;
+            document.getElementById('quiz-desc').textContent = item.data.description;
+            document.getElementById('quiz-question').textContent = item.data.question;
+
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+
+            item.data.options.forEach((optText, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.textContent = optText;
+                btn.onclick = () => handleAnswer(index);
+                optionsContainer.appendChild(btn);
+            });
+
+            modal.classList.add('active');
+        }
+
+        function handleAnswer(selectedIndex) {
+            if (selectedIndex === currentHardware.data.answer) {
+                alert('Correct! Hardware module master cleared.');
+                currentHardware.cleared = true;
+                
+                // Dim down completed hardware mesh visually
+                currentHardware.group.children[0].material.color.setHex(0x555555);
+                
+                clearedCount++;
+                document.getElementById('score').textContent = `Hardware Cleared: ${clearedCount} / 5`;
+                
+                closeQuiz();
+
+                if (clearedCount === 5) {
+                    clearInterval(countdown);
+                    showGameOver(true, "Congratulations! You have mastered all 5 basic computer hardware components!");
+                }
+            } else {
+                alert('Incorrect answer. Try again!');
+            }
+        }
+
+        function closeQuiz() {
+            modal.classList.remove('active');
+            isQuizActive = false;
+            // Push character slightly back so modal doesn't re-trigger immediately
+            character.position.z += 1.5;
+        }
+
+        function showGameOver(win, message) {
+            const screen = document.getElementById('game-over-screen');
+            document.getElementById('game-over-title').textContent = win ? "VICTORY!" : "GAME OVER";
+            document.getElementById('game-over-msg').textContent = message;
+            
+            const timeTaken = (15 * 60) - totalSeconds;
+            const m = Math.floor(timeTaken / 60);
+            const s = timeTaken % 60;
+            document.getElementById('final-score').textContent = `Total Time: ${m}m ${s}s | Cleared: ${clearedCount}/5`;
+            
+            screen.style.display = 'flex';
+        }
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updateMovement();
+
+            // Hover animation for uncleared hardware blocks
+            hardwareMeshes.forEach(item => {
+                if (!item.cleared) {
+                    item.group.children[0].rotation.y += 0.01;
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
