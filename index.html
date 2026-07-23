@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Hardware Learning Game</title>
+    <title>3D Computer Hardware Learning Game</title>
     <style>
         * {
             box-sizing: border-box;
@@ -194,18 +194,12 @@
     </div>
 
     <script>
-        // --- TEXTURE LOADER INITIALIZATION ---
-        const textureLoader = new THREE.TextureLoader();
-
-        // PATH TO YOUR IMAGES (Replace these strings with local file paths or URLs)
-        const CHARACTER_IMAGE_URL = 'character.png'; // Path to character image
-
-        // --- DATA & CONFIGURATION ---
+        // --- DATA CONFIGURATION ---
         const hardwareData = [
             {
                 id: 'motherboard',
                 name: '1. MOTHERBOARD',
-                image: 'motherboard.png', // Image file for Motherboard
+                crop: { x: 0.02, y: 0.12, w: 0.36, h: 0.38 }, // Area from hardware.png
                 pos: { x: -8, z: -5 },
                 description: 'The main circuit board that connects all components.',
                 question: 'What is the primary role of the Motherboard in a computer system?',
@@ -220,22 +214,17 @@
             {
                 id: 'cpu',
                 name: '2. PROCESSOR (CPU)',
-                image: 'cpu.png', // Image file for CPU
+                crop: { x: 0.38, y: 0.14, w: 0.24, h: 0.35 },
                 pos: { x: 0, z: -8 },
                 description: 'The brain of the computer that processes instructions.',
                 question: 'Which component is commonly referred to as the "Brain" of the computer?',
-                options: [
-                    'RAM',
-                    'SSD',
-                    'CPU',
-                    'PSU'
-                ],
+                options: ['RAM', 'SSD', 'CPU', 'PSU'],
                 answer: 2
             },
             {
                 id: 'ram',
                 name: '3. MEMORY (RAM)',
-                image: 'ram.png', // Image file for RAM
+                crop: { x: 0.63, y: 0.16, w: 0.35, h: 0.33 },
                 pos: { x: 8, z: -5 },
                 description: 'Temporary storage that helps the computer run programs smoothly.',
                 question: 'What happens to the data stored in RAM when the computer is turned off?',
@@ -250,7 +239,7 @@
             {
                 id: 'ssd',
                 name: '4. STORAGE (SSD)',
-                image: 'ssd.png', // Image file for SSD
+                crop: { x: 0.06, y: 0.55, w: 0.38, h: 0.38 },
                 pos: { x: -5, z: 4 },
                 description: 'Stores data, files, and operating system permanently.',
                 question: 'Why are Solid State Drives (SSDs) preferred over traditional Hard Drives (HDDs)?',
@@ -265,7 +254,7 @@
             {
                 id: 'psu',
                 name: '5. POWER SUPPLY (PSU)',
-                image: 'psu.png', // Image file for PSU
+                crop: { x: 0.48, y: 0.52, w: 0.48, h: 0.42 },
                 pos: { x: 5, z: 4 },
                 description: 'Provides and regulates power to all computer components.',
                 question: 'What is the main function of the Power Supply Unit (PSU)?',
@@ -289,11 +278,9 @@
         
         const countdown = setInterval(() => {
             if (isQuizActive) return;
-            
             totalSeconds--;
             let mins = Math.floor(totalSeconds / 60);
             let secs = totalSeconds % 60;
-            
             timerElement.textContent = `Time Left: ${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
             if (totalSeconds <= 0) {
@@ -307,19 +294,16 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x121216);
 
-        // Camera
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 18, 16);
         camera.lookAt(0, 0, 0);
 
-        // Renderer
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -327,7 +311,7 @@
         dirLight.castShadow = true;
         scene.add(dirLight);
 
-        // Floor / Platform
+        // Floor
         const floorGeo = new THREE.PlaneGeometry(30, 24);
         const floorMat = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.8 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -339,57 +323,89 @@
         gridHelper.position.y = 0.01;
         scene.add(gridHelper);
 
-        // --- LOADING HARDWARE MESHES WITH IMAGE TEXTURES ---
-        const hardwareMeshes = [];
-
-        hardwareData.forEach(data => {
-            const group = new THREE.Group();
-            group.position.set(data.pos.x, 0, data.pos.z);
-
-            // Load the image texture for the hardware item
-            const hardwareTexture = textureLoader.load(data.image);
-
-            // Create materials array so the image displays cleanly on top and side faces
-            const sideMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 });
-            const topMat = new THREE.MeshStandardMaterial({ map: hardwareTexture, roughness: 0.3 });
+        // --- DYNAMIC IMAGE SLICER HELPER ---
+        function createCroppedTexture(imageSource, cropX, cropY, cropW, cropH) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
             
-            // Box materials: [right, left, top, bottom, front, back]
-            const materials = [sideMat, sideMat, topMat, sideMat, topMat, sideMat];
+            const sourceW = imageSource.naturalWidth || imageSource.width;
+            const sourceH = imageSource.naturalHeight || imageSource.height;
 
-            const geo = new THREE.BoxGeometry(3.2, 0.8, 3.2);
-            const mesh = new THREE.Mesh(geo, materials);
-            mesh.position.y = 0.4;
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            group.add(mesh);
+            const sx = cropX * sourceW;
+            const sy = cropY * sourceH;
+            const sw = cropW * sourceW;
+            const sh = cropH * sourceH;
 
-            // Indicator Ring
-            const ringGeo = new THREE.RingGeometry(2.0, 2.3, 32);
-            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, side: THREE.DoubleSide });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.rotation.x = -Math.PI / 2;
-            ring.position.y = 0.02;
-            group.add(ring);
+            canvas.width = sw;
+            canvas.height = sh;
 
-            scene.add(group);
+            ctx.drawImage(imageSource, sx, sy, sw, sh, 0, 0, sw, sh);
 
-            hardwareMeshes.push({
-                data: data,
-                group: group,
-                mesh: mesh,
-                cleared: false
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        const hardwareMeshes = [];
+        let characterSprite = null;
+
+        // --- LOAD HARDWARE SHEET ---
+        const hardwareImg = new Image();
+        hardwareImg.src = 'hardware.png';
+        hardwareImg.onload = () => {
+            hardwareData.forEach(data => {
+                const group = new THREE.Group();
+                group.position.set(data.pos.x, 0, data.pos.z);
+
+                const itemTexture = createCroppedTexture(
+                    hardwareImg, 
+                    data.crop.x, data.crop.y, data.crop.w, data.crop.h
+                );
+
+                const sideMat = new THREE.MeshStandardMaterial({ color: 0x2d323e, roughness: 0.5 });
+                const topMat = new THREE.MeshStandardMaterial({ map: itemTexture, roughness: 0.3 });
+                
+                const materials = [sideMat, sideMat, topMat, sideMat, topMat, sideMat];
+
+                const geo = new THREE.BoxGeometry(3.5, 0.8, 3.5);
+                const mesh = new THREE.Mesh(geo, materials);
+                mesh.position.y = 0.4;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                group.add(mesh);
+
+                const ringGeo = new THREE.RingGeometry(2.0, 2.3, 32);
+                const ringMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, side: THREE.DoubleSide });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = 0.02;
+                group.add(ring);
+
+                scene.add(group);
+
+                hardwareMeshes.push({
+                    data: data,
+                    group: group,
+                    mesh: mesh,
+                    cleared: false
+                });
             });
-        });
+        };
 
-        // --- LOADING CHARACTER IMAGE SPRITE ---
-        const characterTexture = textureLoader.load(CHARACTER_IMAGE_URL);
-        const charMat = new THREE.SpriteMaterial({ map: characterTexture, transparent: true });
-        const character = new THREE.Sprite(charMat);
-        
-        // Scale adjusted to preserve character image proportions
-        character.scale.set(2.5, 4.5, 1);
-        character.position.set(0, 2.2, 8);
-        scene.add(character);
+        // --- LOAD CHARACTER SHEET ---
+        const characterImg = new Image();
+        characterImg.src = 'character.png';
+        characterImg.onload = () => {
+            // Slice the leftmost pose from character sheet
+            const charTex = createCroppedTexture(characterImg, 0.0, 0.0, 0.25, 1.0);
+            
+            const charMat = new THREE.SpriteMaterial({ map: charTex, transparent: true });
+            characterSprite = new THREE.Sprite(charMat);
+            
+            characterSprite.scale.set(2.2, 4.5, 1);
+            characterSprite.position.set(0, 2.2, 8);
+            scene.add(characterSprite);
+        };
 
         // --- CONTROLS & MOVEMENT ---
         const keys = { W: false, A: false, S: false, D: false };
@@ -413,7 +429,7 @@
         });
 
         function updateMovement() {
-            if (isQuizActive) return;
+            if (isQuizActive || !characterSprite) return;
 
             let moveX = 0;
             let moveZ = 0;
@@ -423,15 +439,15 @@
             if (keys.A) moveX -= speed;
             if (keys.D) moveX += speed;
 
-            const newX = character.position.x + moveX;
-            const newZ = character.position.z + moveZ;
+            const newX = characterSprite.position.x + moveX;
+            const newZ = characterSprite.position.z + moveZ;
 
-            if (Math.abs(newX) < 14) character.position.x = newX;
-            if (Math.abs(newZ) < 11) character.position.z = newZ;
+            if (Math.abs(newX) < 14) characterSprite.position.x = newX;
+            if (Math.abs(newZ) < 11) characterSprite.position.z = newZ;
 
-            camera.position.x = character.position.x * 0.3;
-            camera.position.z = character.position.z + 10;
-            camera.lookAt(character.position.x, 1, character.position.z - 2);
+            camera.position.x = characterSprite.position.x * 0.3;
+            camera.position.z = characterSprite.position.z + 10;
+            camera.lookAt(characterSprite.position.x, 1, characterSprite.position.z - 2);
 
             checkProximity();
         }
@@ -440,10 +456,12 @@
         const modal = document.getElementById('quiz-modal');
 
         function checkProximity() {
+            if (!characterSprite) return;
+
             hardwareMeshes.forEach(item => {
                 if (item.cleared) return;
 
-                const dist = character.position.distanceTo(item.group.position);
+                const dist = characterSprite.position.distanceTo(item.group.position);
                 if (dist < 2.5) {
                     openQuiz(item);
                 }
@@ -477,9 +495,8 @@
                 alert('Correct! Hardware component cleared.');
                 currentHardware.cleared = true;
                 
-                // Dim down hardware visual upon completion
                 currentHardware.mesh.material.forEach(mat => {
-                    mat.color.setHex(0x555555);
+                    mat.color.setHex(0x444444);
                 });
                 
                 clearedCount++;
@@ -499,7 +516,7 @@
         function closeQuiz() {
             modal.classList.remove('active');
             isQuizActive = false;
-            character.position.z += 1.5;
+            if (characterSprite) characterSprite.position.z += 1.5;
         }
 
         function showGameOver(win, message) {
@@ -521,7 +538,6 @@
 
             updateMovement();
 
-            // Subtle floating rotation for uncleared hardware
             hardwareMeshes.forEach(item => {
                 if (!item.cleared) {
                     item.mesh.rotation.y += 0.008;
